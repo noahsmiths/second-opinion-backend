@@ -23,7 +23,7 @@ export function transcribe(filePath: string) {
             console.log(`Speaker ${utterance.speaker}: ${utterance.text}`);
         }
 
-        fs.rmSync(filePath);
+        // fs.rmSync(filePath);
     };
 
     run();

@@ -1,21 +1,14 @@
 # syntax=docker/dockerfile:1
 
-# FROM node:18
-FROM ubuntu:latest
-RUN apt-get update
-RUN apt-get install -y ca-certificates curl gnupg
-RUN mkdir -p /etc/apt/keyrings
-RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-ENV NODE_MAJOR=20
-RUN echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-RUN apt-get update
-RUN apt-get install nodejs -y
-
+FROM node:18
 WORKDIR /app
 COPY . .
 RUN npm install
 RUN npm install typescript -g
 RUN tsc
+RUN touch /app/uploads/transcription.webm
+RUN chown -R node:node /app/uploads/transcription.webm
 EXPOSE 8080
 
+USER node
 CMD ["node", "dist/index.js"]

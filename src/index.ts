@@ -12,14 +12,23 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-const upload = multer({ dest: './uploads' });
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, './uploads')
+    },
+    filename: function (req, file, cb) {
+        cb(null, 'transcription.webm')
+    }
+});
+
+const upload = multer({ storage: storage });
 
 app.post("/upload_transcript", upload.single('transcript'), (req: Request, res: Response) => {
-    let filePath = req.file?.path || '';
-    let newFilePath = filePath + ".webm";
-    fs.renameSync(filePath, newFilePath);
-    console.log(newFilePath);
-    transcribe(newFilePath);
+    // let filePath = req.file?.path || '';
+    // let newFilePath = filePath + ".webm";
+    // fs.renameSync(filePath, newFilePath);
+    // console.log(newFilePath);
+    transcribe(req.file?.path || '');
     res.send({ status: "complete" });
 });
 
