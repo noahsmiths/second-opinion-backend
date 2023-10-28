@@ -2,6 +2,7 @@
 
 FROM node:18
 USER node
+RUN mkdir /app
 WORKDIR /app
 COPY . .
 RUN npm install
