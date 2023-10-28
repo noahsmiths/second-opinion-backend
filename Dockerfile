@@ -7,6 +7,6 @@ RUN npm install
 RUN npm install typescript -g
 RUN tsc
 
-CMD ["node", "dist/index.js"]
+CMD ["sudo", "node", "dist/index.js"]
 EXPOSE 8080
-USER node
+# USER node
