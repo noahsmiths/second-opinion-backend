@@ -6,7 +6,7 @@ COPY . .
 RUN npm install
 RUN npm install typescript -g
 RUN tsc
-RUN chown -R node /app
+RUN chown -R node:node /app
 EXPOSE 8080
 
 USER node
