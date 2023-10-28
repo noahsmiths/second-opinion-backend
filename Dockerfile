@@ -9,3 +9,4 @@ RUN tsc
 
 CMD ["node", "dist/index.js"]
 EXPOSE 8080
+USER node
