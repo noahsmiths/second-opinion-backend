@@ -28,7 +28,10 @@ app.post("/upload_transcript", upload.single('transcript'), (req: Request, res: 
     // let newFilePath = filePath + ".webm";
     // fs.renameSync(filePath, newFilePath);
     // console.log(newFilePath);
-    transcribe(req.file?.path || '');
+    console.log(req.file?.path);
+    let filePath = process.env.PRODUCTION ? "/app/uploads/transcription.webm" : (req.file?.path || '');
+    console.log(filePath);
+    transcribe(filePath);
     res.send({ status: "complete" });
 });
 
