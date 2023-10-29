@@ -73,7 +73,7 @@ export function analyzeData(transcript: string, notes: string) {
                     {"role": "system", "content": "You're a healthcare assistant who's job it is to review a doctor's notes and a transcript of a conversation between that doctor and a patient. Review the doctor's recommendations for any potential issues, misunderstandings, or incongruities between what the patient said and what the doctor noted. If there are any, create a brief list of them in JSON as an array of objects. These object should have a key 'issue' mapping to a string and a key 'description' mapping to a string. If there are none, return an empty JSON array."},
                     {"role": "user", "content": `Doctor's Notes:\n\n${notes}\n\nTranscript:\n\n${transcript}`},
                     {"role": "assistant", "content": textResponse},
-                    {"role": "user", "content": `Reprint the entire transcript but replace the labels with Doctor or Patient. Also, if you identified any potential issues, highlight the area in the transcript where each issue was found by surrounding the specific words with the following characters: ##. Be as precise as possible, and make sure to reproduce the entire transcript with the only the changes described.`}
+                    {"role": "user", "content": `Reprint the entire transcript. If you identified any potential issues, highlight the words in the transcript where the issue was found by surrounding them with a 'b' html tag. Be precise, and try to wrap only the necessary words.`}
                 ]
             });
 
@@ -91,6 +91,26 @@ export function analyzeData(transcript: string, notes: string) {
     });
 }
 
+export function segmentTranscript(rawTranscript: string) {
+    return new Promise<string>(async (res, rej) => {
+        try {
+            let segmentedTranscript = await openai.chat.completions.create({
+                model: "gpt-4",
+                temperature: 0,
+                messages: [
+                    {"role": "system", "content": "You are a healthcare assistant. Your job is to take a raw transcription of a conversation between a doctor and a patient, and return that exact transcript with labels of which speaker it is."},
+                    {"role": "user", "content": `Transcript:\n\n${rawTranscript.replace(/\n\n/g, "\n")}`},
+                ]
+            });
+
+            res(segmentedTranscript.choices[0].message.content || '');
+        } catch (err) {
+            console.error(err);
+            rej(err);
+        }
+    });
+}
+
 interface PipelineParams {
     sessionCollection: Collection<Document>,
     sessionId: string,
@@ -104,14 +124,16 @@ export async function triggerPipeline({ sessionCollection, sessionId, patientId,
     // let notes = "some notes here";
     // let transcript = "some transcript here";
     let formattedTranscription = "";
+    let transcription;
 
     try {
         console.log("Transcribing");
-        let transcription = await transcribe(filePath);
+        transcription = await transcribe(filePath);
+        formattedTranscription = transcription.text;
 
-        for (let utterance of transcription.utterances) {
-            formattedTranscription += `Speaker ${utterance.speaker}: ${utterance.text}\n\n`;
-        }
+        // for (let utterance of transcription.utterances) {
+        //     formattedTranscription += `Speaker ${utterance.speaker}: ${utterance.text}\n\n`;
+        // }
         console.log("Transcription complete");
     } catch (err) {
         console.error(err);
@@ -138,9 +160,32 @@ export async function triggerPipeline({ sessionCollection, sessionId, patientId,
         }
     });
 
+    let segmented = "";
+
+    try {
+        console.log("segmenting");
+
+        segmented = await segmentTranscript(transcription.text);
+        await sessionCollection.findOneAndUpdate({ "_id": new ObjectId(sessionId)}, {
+            $set: {
+                annotated_transcript: segmented
+            }
+        });
+
+        console.log("segmentation complete");
+    } catch (err) {
+        console.error(err);
+        await sessionCollection.findOneAndUpdate({ "_id": new ObjectId(sessionId)}, {
+            $set: {
+                annotated_transcript: "Segmentation failed. Check logs for details."
+            }
+        });
+        return;
+    }
+
     try {
         console.log("Analyzing with GPT");
-        let [summary, analysis] = await Promise.all([generateSummary(formattedTranscription), analyzeData(notes, formattedTranscription)]);
+        let [summary, analysis] = await Promise.all([generateSummary(segmented), analyzeData(segmented, notes)]);
 
         await sessionCollection.findOneAndUpdate({ "_id": new ObjectId(sessionId)}, {
             $set: {
@@ -158,7 +203,7 @@ export async function triggerPipeline({ sessionCollection, sessionId, patientId,
                 await sessionCollection.findOneAndUpdate({ "_id": new ObjectId(sessionId)}, {
                     $set: {
                         flags: parsedIssues,
-                        annotated_transcript: analysis.annotatedTranscription
+                        annotated_transcript: analysis.annotatedTranscription.split('<b>').join('<span style="color: red; text-decoration: underline; font-weight: bold">').split('</b>').join('</span>')
                     }
                 });
             } catch (err) {
@@ -168,7 +213,7 @@ export async function triggerPipeline({ sessionCollection, sessionId, patientId,
                 await sessionCollection.findOneAndUpdate({ "_id": new ObjectId(sessionId)}, {
                     $set: {
                         flags: [{issue: `Issue parsing annotations.`, description: `Raw GPT results: ${analysis.issueList}`}],
-                        annotated_transcript: analysis.annotatedTranscription
+                        annotated_transcript: analysis.annotatedTranscription.split('<b>').join('<span style="color: red; text-decoration: underline; font-weight: bold">').split('</b>').join('</span>')
                     }
                 });
             }
@@ -187,7 +232,7 @@ export async function triggerPipeline({ sessionCollection, sessionId, patientId,
         await sessionCollection.findOneAndUpdate({ "_id": new ObjectId(sessionId)}, {
             $set: {
                 summary: "GPT Interaction Failed. Check logs.",
-                annotated_transcript: "GPT Interaction Failed. Check logs.",
+                // annotated_transcript: "GPT Interaction Failed. Check logs.",
             }
         });
         return;
