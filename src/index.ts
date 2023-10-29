@@ -14,7 +14,7 @@ app.use(cors());
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-      cb(null, process.env.PRODUCTION ? './uploads' : '/app/uploads')
+      cb(null, process.env.PRODUCTION ? '/app/uploads' : './uploads')
     },
     filename: function (req, file, cb) {
         cb(null, 'transcription.webm')
